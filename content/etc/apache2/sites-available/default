@@ -1,0 +1,54 @@
+<VirtualHost *:80>
+  	ServerAdmin webmaster@localhost
+
+  	DocumentRoot /usr/share/icingaweb2/public
+
+  	<Directory />
+  		Options FollowSymLinks
+  		AllowOverride None
+  	</Directory>
+  	<Directory /usr/share/icingaweb2/public/>
+      Options SymLinksIfOwnerMatch
+      AllowOverride None
+
+      SetEnv ICINGAWEB_CONFIGDIR "/etc/icingaweb2"
+
+      EnableSendfile Off
+
+      <IfModule mod_rewrite.c>
+          RewriteEngine on
+          RewriteBase /
+          RewriteCond %{REQUEST_FILENAME} -s [OR]
+          RewriteCond %{REQUEST_FILENAME} -l [OR]
+          RewriteCond %{REQUEST_FILENAME} -d
+          RewriteRule ^.*$ - [NC,L]
+          RewriteRule ^.*$ index.php [NC,L]
+      </IfModule>
+
+      <IfModule !mod_rewrite.c>
+          DirectoryIndex error_norewrite.html
+          ErrorDocument 404 /error_norewrite.html
+      </IfModule>
+  	</Directory>
+
+  	ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
+  	<Directory "/usr/lib/cgi-bin">
+  		AllowOverride None
+  		Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
+  		Order allow,deny
+  		Allow from all
+  	</Directory>
+
+  	ErrorLog ${APACHE_LOG_DIR}/error.log
+
+  	# Possible values include: debug, info, notice, warn, error, crit,
+  	# alert, emerg.
+  	LogLevel warn
+
+  	CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+  	RewriteEngine off
+  	RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  	RewriteRule .* https://%{HTTP_HOST}%{REQUEST_URI} [R,L]
+
+</VirtualHost>

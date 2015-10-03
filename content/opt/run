@@ -1,0 +1,102 @@
+#!/bin/bash
+
+set -e
+
+initfile=/etc/icinga2.init
+
+chmod 1777 /tmp
+
+# chown directories and files that might be coming from volumes
+chown -R nagios:root /etc/icinga2
+chown nagios:nagios /etc/icinga2/features-available/ido-mysql.conf
+chown -R nagios:nagios /var/lib/icinga2
+chown root:icingaweb2 /etc/icingaweb2
+chmod 2770 /etc/icingaweb2
+chown -R www-data:icingaweb2 /etc/icingaweb2/*
+find /etc/icingaweb2 -type f -name "*.ini" -exec chmod 660 {} \;
+find /etc/icingaweb2 -type d -exec chmod 2770 {} \;
+
+if [ $MYSQL_PORT_3306_TCP_ADDR ]; then
+  IDO_DB_HOSTNAME=$MYSQL_PORT_3306_TCP_ADDR
+  ICINGAWEB2_DB_HOSTNAME=$MYSQL_PORT_3306_TCP_ADDR
+fi
+
+if [ ! -f "${initfile}" ]; then
+
+  #icinga2-enable-feature ido-mysql >> /dev/null
+  if [[ -L /etc/icinga2/features-enabled/ido-mysql.conf ]]; then echo "Symlink for /etc/icinga2/features-enabled/ido-mysql.conf exists already...skipping"; else ln -s /etc/icinga2/features-available/ido-mysql.conf /etc/icinga2/features-enabled/ido-mysql.conf; fi
+  #icinga2-enable-feature livestatus >> /dev/null
+  if [[ -L /etc/icinga2/features-enabled/livestatus.conf ]]; then echo "Symlink for /etc/icinga2/features-enabled/livestatus.conf exists already... skipping"; else ln -s /etc/icinga2/features-available/livestatus.conf /etc/icinga2/features-enabled/livestatus.conf; fi
+  #icinga2-enable-feature compatlog >> /dev/null
+  if [[ -L /etc/icinga2/features-enabled/compatlog.conf ]]; then echo "Symlink for /etc/icinga2/features-enabled/compatlog.conf exists already... skipping"; else ln -s /etc/icinga2/features-available/compatlog.conf /etc/icinga2/features-enabled/compatlog.conf; fi
+  #icinga2-enable-feature command >> /dev/null
+  if [[ -L /etc/icinga2/features-enabled/command.conf ]]; then echo "Symlink for /etc/icinga2/features-enabled/command.conf exists already...skipping"; else ln -s /etc/icinga2/features-available/command.conf /etc/icinga2/features-enabled/command.conf; fi
+
+  usermod -a -G nagios www-data >> /dev/null
+
+  echo "=>Initializing icinga configurations."
+  echo "=>This may take a few minutes"
+
+  # Icinga2 - DB config
+  sed -i 's/host =\ \".*\"/host =\ \"'${IDO_DB_HOSTNAME}'\"/g' /etc/icinga2/features-available/ido-mysql.conf
+  sed -i 's/user =\ \".*\"/user =\ \"'${IDO_DB_USERNAME}'\"/g' /etc/icinga2/features-available/ido-mysql.conf
+  sed -i 's/password \= \".*\"/password \= \"'${IDO_DB_PASSWORD}'\"/g' /etc/icinga2/features-available/ido-mysql.conf
+  sed -i 's/database \= \".*\"/database =\ \"'${IDO_DB_DATABASE}'\"/g' /etc/icinga2/features-available/ido-mysql.conf
+
+  # Icinga-Web2
+  if [[ -L /etc/icingaweb2/enabledModules/monitoring ]]; then echo "Symlink for /etc/icingaweb2/enabledModules/monitoring exists already...skipping"; else ln -s /etc/icingaweb2/modules/monitoring /etc/icingaweb2/enabledModules/monitoring; fi
+  if [[ -L /etc/icingaweb2/enabledModules/doc ]]; then echo "Symlink for /etc/icingaweb2/enabledModules/doc exists already...skipping"; else ln -s /etc/icingaweb2/modules/doc /etc/icingaweb2/enabledModules/doc; fi
+  mkdir -p /var/log/icingaweb2
+  chown www-data:adm /var/log/icingaweb2
+
+  # Icinga-Web2 - DB Config
+cat > /etc/icingaweb2/resources.ini << EOF
+[icingaweb_db]
+type                = "db"
+db                  = "mysql"
+host                = "$ICINGAWEB2_DB_HOSTNAME"
+port                = "3306"
+dbname              = "$ICINGAWEB2_DB_DATABASE"
+username            = "$ICINGAWEB2_DB_USERNAME"
+password            = "$ICINGAWEB2_DB_PASSWORD"
+prefix              = "icingaweb_"
+
+[icinga_ido]
+type                = "db"
+db                  = "mysql"
+host                = "$IDO_DB_HOSTNAME"
+port                = "3306"
+dbname              = "$IDO_DB_DATABASE"
+username            = "$IDO_DB_USERNAME"
+password            = "$IDO_DB_PASSWORD"
+EOF
+
+  touch ${initfile}
+
+  # Provision the database
+  mysql -h $IDO_DB_HOSTNAME -u $IDO_DB_USERNAME --password=$IDO_DB_PASSWORD -e "CREATE SCHEMA IF NOT EXISTS ${IDO_DB_DATABASE} DEFAULT CHARACTER SET utf8 ;"
+  mysql -h $IDO_DB_HOSTNAME -u $IDO_DB_USERNAME --password=$IDO_DB_PASSWORD -e "CREATE SCHEMA IF NOT EXISTS ${ICINGAWEB2_DB_DATABASE} DEFAULT CHARACTER SET utf8 ;"
+
+  if [ $(mysql -N -s -h $IDO_DB_HOSTNAME -u $IDO_DB_USERNAME --password=$IDO_DB_PASSWORD -e \
+    "select count(*) from information_schema.tables where table_type = 'BASE TABLE' and table_schema = '${IDO_DB_DATABASE}'") -eq 0 ]; then
+
+      echo "=>Initializing $IDO_DB_DATABASE"
+      mysql -h $IDO_DB_HOSTNAME -u $IDO_DB_USERNAME --password=$IDO_DB_PASSWORD $IDO_DB_DATABASE < /usr/share/icinga2-ido-mysql/schema/mysql.sql
+  fi
+
+  if [ $(mysql -N -s -h $IDO_DB_HOSTNAME -u $IDO_DB_USERNAME --password=$IDO_DB_PASSWORD -e \
+    "select count(*) from information_schema.tables where table_type = 'BASE TABLE' and table_schema = '${ICINGAWEB2_DB_DATABASE}'") -eq 0 ]; then
+
+      echo "=>Initializing $ICINGAWEB2_DB_DATABASE"
+      mysql -h $ICINGAWEB2_DB_HOSTNAME -u $ICINGAWEB2_DB_USERNAME --password=$ICINGAWEB2_DB_PASSWORD $ICINGAWEB2_DB_DATABASE < /usr/share/icingaweb2/etc/schema/mysql.schema.sql
+
+      echo "=>Creating user: ${ICINGA_ADMIN_USER}"
+      ICINGAADMIN_PASSWORD=`openssl passwd -1 "${ICINGA_ADMIN_PASSWORD}"`
+      mysql -h $ICINGAWEB2_DB_HOSTNAME -u $ICINGAWEB2_DB_USERNAME --password=$ICINGAWEB2_DB_PASSWORD $ICINGAWEB2_DB_DATABASE -e "INSERT IGNORE INTO icingaweb_user (name, active, password_hash) VALUES ('${ICINGA_ADMIN_USER}', 1, '${ICINGAADMIN_PASSWORD}');"
+  fi
+fi
+
+echo "Starting Supervisor.  You can safely CTRL-C and the container will continue to run with or without the -d (daemon) option"
+/usr/bin/supervisord >> /dev/null &
+
+/run.sh
