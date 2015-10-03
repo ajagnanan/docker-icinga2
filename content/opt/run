@@ -94,6 +94,12 @@ EOF
       ICINGAADMIN_PASSWORD=`openssl passwd -1 "${ICINGA_ADMIN_PASSWORD}"`
       mysql -h $ICINGAWEB2_DB_HOSTNAME -u $ICINGAWEB2_DB_USERNAME --password=$ICINGAWEB2_DB_PASSWORD $ICINGAWEB2_DB_DATABASE -e "INSERT IGNORE INTO icingaweb_user (name, active, password_hash) VALUES ('${ICINGA_ADMIN_USER}', 1, '${ICINGAADMIN_PASSWORD}');"
   fi
+
+  # set icinga2 NodeName
+  sed -i -e 's/^.* NodeName = .*/const NodeName = "docker-icinga2"/gi' /etc/icinga2/constants.conf; \
+  icinga2 pki new-cert --cn docker-icinga2 --key /etc/icinga2/pki/docker-icinga2.key --csr /etc/icinga2/pki/docker-icinga2.csr; \
+  icinga2 pki sign-csr --csr /etc/icinga2/pki/docker-icinga2.csr --cert /etc/icinga2/pki/docker-icinga2.crt
+
 fi
 
 echo "Starting Supervisor.  You can safely CTRL-C and the container will continue to run with or without the -d (daemon) option"

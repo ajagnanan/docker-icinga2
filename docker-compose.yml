@@ -23,7 +23,7 @@ icinga2:
     - ICINGAWEB2_DB_DATABASE=icinga2_web
     - ICINGAWEB2_DB_USERNAME=root
     - ICINGAWEB2_DB_PASSWORD=root
-    - ICINGA_ADMIN_USER=admin
+    - ICINGA_ADMIN_USER=icingaadmin
     - ICINGA_ADMIN_PASSWORD=test
   restart: always
   command: >
