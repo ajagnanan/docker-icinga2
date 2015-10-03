@@ -7,7 +7,7 @@ mysql:
   restart: always
 
 icinga2:
-  image: ajagnanan/icinga2
+  image: ajagnanan/docker-icinga2
   ports:
     - "80:80"
     - "2222:22"
