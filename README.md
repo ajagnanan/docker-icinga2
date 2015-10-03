@@ -35,9 +35,9 @@ Icinga-Web2 requires a user to be present in the database:
 ### SSH / Login
 
   ```
-      Username: root
-      Password: $ROOT_PASS
-      Port: 22
+    Username: root
+    Password: $ROOT_PASS
+    Port: 22
   ```
 
   The web interface is available at `http://localhost`
