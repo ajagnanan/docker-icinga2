@@ -13,6 +13,9 @@ icinga2:
     - "2222:22"
   links:
       - mysql:mysql
+  volumes:
+      - sample/icinga2:/icinga2
+      - sample/icingaweb2:/icingaweb2
   environment:
     - ROOT_PASS=root
     - IDO_DB_HOSTNAME=

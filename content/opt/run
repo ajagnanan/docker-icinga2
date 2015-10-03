@@ -16,6 +16,15 @@ chown -R www-data:icingaweb2 /etc/icingaweb2/*
 find /etc/icingaweb2 -type f -name "*.ini" -exec chmod 660 {} \;
 find /etc/icingaweb2 -type d -exec chmod 2770 {} \;
 
+if [ "$(ls -A /icinga2)" ]; then
+  chown -R nagios:root /icinga2
+fi
+if [ "$(ls -A /icingaweb2)" ]; then
+  chown root:icingaweb2 /icingaweb2
+  chmod 2770 /icingaweb2
+  chown -R www-data:icingaweb2 /icingaweb2/*
+fi
+
 if [ $MYSQL_PORT_3306_TCP_ADDR ]; then
   IDO_DB_HOSTNAME=$MYSQL_PORT_3306_TCP_ADDR
   ICINGAWEB2_DB_HOSTNAME=$MYSQL_PORT_3306_TCP_ADDR
@@ -99,6 +108,11 @@ EOF
   sed -i -e 's/^.* NodeName = .*/const NodeName = "docker-icinga2"/gi' /etc/icinga2/constants.conf; \
   icinga2 pki new-cert --cn docker-icinga2 --key /etc/icinga2/pki/docker-icinga2.key --csr /etc/icinga2/pki/docker-icinga2.csr; \
   icinga2 pki sign-csr --csr /etc/icinga2/pki/docker-icinga2.csr --cert /etc/icinga2/pki/docker-icinga2.crt
+
+  # add mounted confs
+cat >> /etc/icinga2/icinga2.conf << EOF
+include_recursive "/icinga2/conf.d"
+EOF
 
 fi
 

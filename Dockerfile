@@ -27,6 +27,9 @@ RUN apt-get -qq update \
 
 ADD content/ /
 
+RUN mkdir /icinga2 \
+    && mkdir /icingaweb2
+
 RUN chmod u+x /opt/supervisor/icinga2_supervisor /opt/supervisor/apache2_supervisor /opt/run
 
 # Temporary hack to get icingaweb2 modules via git
@@ -39,7 +42,7 @@ RUN mkdir -p /etc/icingaweb2/enabledModules \
 
 EXPOSE 80 22
 
-VOLUME  ["/etc/icinga2", "/etc/icingaweb2", "/var/lib/icinga2"]
+VOLUME  ["/icinga2", "/icingaweb2"]
 
 # Initialize and run Supervisor
 ENTRYPOINT ["/opt/run"]
